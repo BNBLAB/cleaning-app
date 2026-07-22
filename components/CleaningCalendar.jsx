@@ -12,6 +12,14 @@ const STATUS_ORDER = ["pending", "in_progress", "done", "needs_check"];
 
 const PALETTE = ["#C4703A", "#4A7A9B", "#8A6BAE", "#6B8E4E", "#B2854A", "#4E8A8A", "#A65C7A", "#7A8A4E"];
 
+const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
+function formatMonthDay(d) {
+  return `${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAY_JA[d.getDay()]})`;
+}
+function formatWeekdayShort(d) {
+  return WEEKDAY_JA[d.getDay()];
+}
+
 function toISO(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -56,7 +64,6 @@ export default function CleaningCalendar({ tasks: initialTasks, today: todayISO,
     try {
       if (onStatusChange) await onStatusChange(taskId, next);
     } catch (e) {
-      // 失敗したら元に戻す
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)));
       alert("ステータスの更新に失敗しました。もう一度お試しください。");
     }
@@ -83,7 +90,7 @@ export default function CleaningCalendar({ tasks: initialTasks, today: todayISO,
       <div style={{ display: "flex", gap: 1, background: "#E4E1D8", borderRadius: 14, overflow: "hidden", border: "1px solid #E4E1D8", marginBottom: 20 }}>
         <div style={{ flex: "0 0 180px", background: "#20302C", color: "#F6F5F1", padding: "18px 20px" }}>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, opacity: 0.7, letterSpacing: 1 }}>
-            {today.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}
+            {formatMonthDay(today)}
           </div>
           <div style={{ fontFamily: "'Zen Kaku Gothic New', sans-serif", fontWeight: 900, fontSize: 30, marginTop: 6 }}>
             {todayCounts.total}
@@ -115,7 +122,7 @@ export default function CleaningCalendar({ tasks: initialTasks, today: todayISO,
               const isToday = toISO(d) === toISO(today);
               return (
                 <div key={toISO(d)} style={{ textAlign: "center", padding: "6px 0", borderRadius: 8, background: isToday ? "#20302C" : "transparent", color: isToday ? "#F6F5F1" : "#5C5850" }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, opacity: 0.75 }}>{d.toLocaleDateString("ja-JP", { weekday: "short" })}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, opacity: 0.75 }}>{formatWeekdayShort(d)}</div>
                   <div style={{ fontFamily: "'Zen Kaku Gothic New', sans-serif", fontWeight: 700, fontSize: 16 }}>{d.getDate()}</div>
                 </div>
               );
