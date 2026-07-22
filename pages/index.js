@@ -57,8 +57,8 @@ export default function Home({ tasks, today, errorMessage }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "同期に失敗しました");
       setSyncMessage(`同期しました: ${JSON.stringify(data.synced)}`);
-      // 画面を最新化
-      window.location.reload();
+      // メッセージを読む時間を確保してからリロード
+      setTimeout(() => window.location.reload(), 4000);
     } catch (e) {
       setSyncMessage(`エラー: ${e.message}`);
     } finally {
