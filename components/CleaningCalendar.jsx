@@ -258,6 +258,16 @@ function AssigneeSelect({ value, unlocked, onChange, options, requestUnlock, sma
   );
 }
 
+function StayBadge({ stay }) {
+  return (
+    <div style={{ fontSize: 10.5, color: "#5C5850", background: "#EFEFEA", border: BORDER, borderRadius: 8, padding: "6px 8px", lineHeight: 1.6 }}>
+      <div style={{ fontWeight: 700, color: "#3B3833" }}>🛎 ゲスト滞在中</div>
+      <div>{stay.guestName || "(氏名未取得)"}（{stay.guests}名 / {stay.nights}泊）</div>
+      <div>{stay.checkIn} 〜 {stay.checkOut}</div>
+    </div>
+  );
+}
+
 function TaskCard({ t, prop, unlocked, onCycle, onAssignee, onNotes, options, compact, requestUnlock, conflictCounts }) {
   const guard = (fn) => (...args) => { if (!unlocked) { requestUnlock(); return; } fn(...args); };
   const unassigned = !t.assignee;
@@ -315,15 +325,16 @@ function TaskCard({ t, prop, unlocked, onCycle, onAssignee, onNotes, options, co
  * props.onStatusChange / onAssigneeChange / onNotesChange / onSpecialAssigneeChange / onReorder / onAmenitiesChange
  */
 export default function CleaningCalendar({
-  tasks: initialTasks,
-  properties: initialProperties,
-  specialAssignees: initialSpecialAssignees,
-  today: todayISO,
-  weekStart: weekStartISO,
+  tasks: initialTasks = [],
+  properties: initialProperties = [],
+  specialAssignees: initialSpecialAssignees = {},
+  today: todayISO = "2026-01-01",
+  weekStart: weekStartISO = "2026-01-01",
   showHidden = false,
   assigneeOptions = [],
   shiftsInWeek = [],
   roomOptions = [],
+  stays = [],
   onStatusChange,
   onAssigneeChange,
   onNotesChange,
@@ -412,7 +423,7 @@ export default function CleaningCalendar({
         return projected < 2 || s.two_plus;
       })
       .map((s) => s.staff_name);
-    return eligible.length > 0 ? eligible : assigneeOptions; // 誰も登録がなければ全員から選べるようにしておく
+    return eligible.length > 0 ? eligible : assigneeOptions;
   };
 
   const today = useMemo(() => new Date(todayISO + "T00:00:00Z"), [todayISO]);
@@ -686,16 +697,30 @@ export default function CleaningCalendar({
               [...visibleProperties]
                 .sort((a, b) => {
                   const iso = toISO(days[selectedDayIdx]);
-                  const aHas = filteredTasks.some((x) => x.propertyId === a.id && x.date === iso) ? 0 : 1;
-                  const bHas = filteredTasks.some((x) => x.propertyId === b.id && x.date === iso) ? 0 : 1;
-                  return aHas - bHas;
+                  const rank = (p) => {
+                    if (filteredTasks.some((x) => x.propertyId === p.id && x.date === iso)) return 0;
+                    if (stays.some((s) => s.propertyId === p.id && s.date === iso)) return 1;
+                    return 2;
+                  };
+                  return rank(a) - rank(b);
                 })
                 .map((prop) => {
                   const iso = toISO(days[selectedDayIdx]);
-                  const t = filteredTasks.find((x) => x.propertyId === prop.id && x.date === iso);
-                  if (!t) return null;
+                  const propTasks = filteredTasks.filter((x) => x.propertyId === prop.id && x.date === iso);
+                  const propStays = stays.filter((s) => s.propertyId === prop.id && s.date === iso);
+                  if (propTasks.length === 0 && propStays.length === 0) return null;
                   return (
-                    <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} conflictCounts={conflictCountsByDate[t.date] || {}} />
+                    <React.Fragment key={prop.id}>
+                      {propTasks.map((t) => (
+                        <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} conflictCounts={conflictCountsByDate[t.date] || {}} />
+                      ))}
+                      {propStays.map((s, i) => (
+                        <div key={i}>
+                          <div style={{ fontSize: 11, color: prop.color, fontWeight: 700, marginBottom: 4 }}>{prop.name} {s.roomName}</div>
+                          <StayBadge stay={s} />
+                        </div>
+                      ))}
+                    </React.Fragment>
                   );
                 })}
             {specialRowsForArea.map((row) => renderSpecialRowMobile(row))}
@@ -739,14 +764,17 @@ export default function CleaningCalendar({
                   {days.map((d) => {
                     const iso = toISO(d);
                     const dayTasks = filteredTasks.filter((t) => t.propertyId === prop.id && t.date === iso);
+                    const dayStays = dayTasks.length === 0 ? stays.filter((s) => s.propertyId === prop.id && s.date === iso) : [];
                     return (
                       <div key={prop.id + iso} style={{ minHeight: 72, display: "flex", flexDirection: "column", gap: 6, justifyContent: "center", padding: 8, borderBottom: BORDER, borderRight: BORDER, background: propIdx % 2 === 0 ? "#FFFFFF" : "#FAFAF7" }}>
-                        {dayTasks.length === 0 ? (
+                        {dayTasks.length === 0 && dayStays.length === 0 ? (
                           <div style={{ fontSize: 11, color: "#C9C5B8", textAlign: "center" }}>—</div>
-                        ) : (
+                        ) : dayTasks.length > 0 ? (
                           dayTasks.map((t) => (
                             <TaskCard key={t.id} t={t} prop={prop} unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} conflictCounts={conflictCountsByDate[t.date] || {}} />
                           ))
+                        ) : (
+                          dayStays.map((s, i) => <StayBadge key={i} stay={s} />)
                         )}
                       </div>
                     );
