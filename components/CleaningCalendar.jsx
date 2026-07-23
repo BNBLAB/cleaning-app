@@ -442,14 +442,7 @@ export default function CleaningCalendar({
             }}
             style={{ border: BORDER, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
           />
-         {unlocked && (
-            
-              href={showHidden ? "/" : "/?showHidden=1"}
-              style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}
-            >
-              {showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}
-            </a>
-          )}
+       {unlocked && <a href={showHidden ? "/" : "/?showHidden=1"} style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}>{showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}</a>}
         </div>
         <div style={{ display: "flex", gap: 6, background: "#E9E6DC", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
           {AREAS.map((a) => (
