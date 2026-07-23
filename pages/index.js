@@ -32,11 +32,14 @@ export async function getServerSideProps({ query }) {
   const weekStartISO = toISO(weekStart);
   const weekEndISO = toISO(addDays(weekStart, 6));
 
-  // 物件一覧（並び順つき）
-  const { data: properties } = await supabase
+  // 物件一覧（並び順つき）。?showHidden=1 のときは非表示の物件も含める
+  const showHidden = query.showHidden === "1";
+  let propertiesQuery = supabase
     .from("properties")
-    .select("id, name, area, amenities, sort_order")
+    .select("id, name, area, amenities, sort_order, active")
     .order("sort_order", { ascending: true });
+  if (!showHidden) propertiesQuery = propertiesQuery.eq("active", true);
+  const { data: properties } = await propertiesQuery;
 
   const { data, error } = await supabase
     .from("cleaning_tasks")
@@ -136,13 +139,14 @@ export async function getServerSideProps({ query }) {
       specialAssignees,
       today: todayISO,
       weekStart: weekStartISO,
+      showHidden,
       errorMessage: null,
       assigneeOptions: Array.from(assigneeSet),
     },
   };
 }
 
-export default function Home({ tasks, properties, specialAssignees, today, weekStart, errorMessage, assigneeOptions }) {
+export default function Home({ tasks, properties, specialAssignees, today, weekStart, showHidden, errorMessage, assigneeOptions }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
@@ -217,6 +221,16 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
     if (!res.ok) throw new Error("更新失敗");
   };
 
+  const onPropertyUpdate = async (propertyId, fields) => {
+    const res = await fetch(`/api/properties/${propertyId}/amenities`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) throw new Error("更新失敗");
+    window.location.reload();
+  };
+
   return (
     <div>
       <div style={{ padding: "16px 24px 0", display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
@@ -252,6 +266,7 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
         specialAssignees={specialAssignees}
         today={today}
         weekStart={weekStart}
+        showHidden={showHidden}
         assigneeOptions={assigneeOptions}
         onStatusChange={onStatusChange}
         onAssigneeChange={onAssigneeChange}
@@ -259,6 +274,7 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
         onSpecialAssigneeChange={onSpecialAssigneeChange}
         onReorder={onReorder}
         onAmenitiesChange={onAmenitiesChange}
+        onPropertyUpdate={onPropertyUpdate}
       />
     </div>
   );
