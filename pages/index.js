@@ -312,3 +312,23 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
 
       <CleaningCalendar
         tasks={tasks}
+        properties={properties}
+        specialAssignees={specialAssignees}
+        today={today}
+        weekStart={weekStart}
+        showHidden={showHidden}
+        assigneeOptions={assigneeOptions}
+        shiftsInWeek={shiftsInWeek}
+        roomOptions={roomOptions}
+        onStatusChange={onStatusChange}
+        onAssigneeChange={onAssigneeChange}
+        onNotesChange={onNotesChange}
+        onSpecialAssigneeChange={onSpecialAssigneeChange}
+        onReorder={onReorder}
+        onAmenitiesChange={onAmenitiesChange}
+        onPropertyUpdate={onPropertyUpdate}
+        onAddManualBooking={onAddManualBooking}
+      />
+    </div>
+  );
+}
