@@ -30,8 +30,8 @@ export async function getServerSideProps({ query }) {
     year = y;
     month = m;
   }
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 0));
   const monthStartISO = toISO(monthStart);
   const monthEndISO = toISO(monthEnd);
 
@@ -102,10 +102,10 @@ export default function ShiftsPage({ year, month, staffList: initialStaffList, s
   }, []);
 
   const monthDays = useMemo(() => {
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0);
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 0));
     const days = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) days.push(new Date(d));
     return days;
   }, [year, month]);
 
@@ -191,8 +191,8 @@ export default function ShiftsPage({ year, month, staffList: initialStaffList, s
           <div style={{ borderBottom: BORDER, borderRight: BORDER, background: "#F1EFE7" }} />
           {monthDays.map((d) => (
             <div key={toISO(d)} style={{ textAlign: "center", padding: "6px 0", borderBottom: BORDER, borderRight: BORDER, background: "#F1EFE7", fontSize: 10 }}>
-              <div style={{ opacity: 0.7 }}>{WEEKDAY_JA[d.getDay()]}</div>
-              <div style={{ fontWeight: 700 }}>{d.getDate()}</div>
+              <div style={{ opacity: 0.7 }}>{WEEKDAY_JA[d.getUTCDay()]}</div>
+              <div style={{ fontWeight: 700 }}>{d.getUTCDate()}</div>
             </div>
           ))}
 
