@@ -96,4 +96,89 @@ async function syncAccount(accountKey, refreshToken) {
     const isActive = ACTIVE_STATUSES.has(b.status);
     bookingRows.push({
       account_key: accountKey,
-      beds24_booking_id:
+      beds24_booking_id: String(b.id),
+      room_id: roomId,
+      guest_name: extractGuestName(b),
+      num_adult: b.numAdult ?? null,
+      num_child: b.numChild ?? null,
+      check_in: b.arrival,
+      check_out: b.departure,
+      status: isActive ? b.status : "cancelled",
+      raw_payload: b,
+      updated_at: new Date().toISOString(),
+      _roomId: roomId,
+      _isActive: isActive,
+      _sameDay: isSameDayCheckin(b, bookings),
+    });
+  }
+
+  if (bookingRows.length === 0) {
+    return { fetched: bookings.length, synced: 0, skippedNoRoom: [...new Set(skippedNoRoom)] };
+  }
+
+  // bookingsをまとめてupsert（1回のクエリ）
+  const { data: upsertedBookings, error: bookingErr } = await supabase
+    .from("bookings")
+    .upsert(
+      bookingRows.map(({ _roomId, _isActive, _sameDay, ...row }) => row),
+      { onConflict: "account_key,beds24_booking_id" }
+    )
+    .select("id, beds24_booking_id, check_out");
+  if (bookingErr) throw bookingErr;
+
+  const bookingIdByBeds24Id = new Map(upsertedBookings.map((b) => [b.beds24_booking_id, b.id]));
+
+  const activeTasks = [];
+  const cancelledBookingIds = [];
+  for (const row of bookingRows) {
+    const bookingId = bookingIdByBeds24Id.get(row.beds24_booking_id);
+    if (!bookingId) continue;
+    if (row._isActive) {
+      activeTasks.push({
+        booking_id: bookingId,
+        room_id: row._roomId,
+        scheduled_date: row.check_out,
+        same_day_checkin: row._sameDay,
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      cancelledBookingIds.push(bookingId);
+    }
+  }
+
+  if (activeTasks.length > 0) {
+    const { error: taskErr } = await supabase
+      .from("cleaning_tasks")
+      .upsert(activeTasks, { onConflict: "booking_id" });
+    if (taskErr) throw taskErr;
+  }
+
+  if (cancelledBookingIds.length > 0) {
+    const { error: delErr } = await supabase
+      .from("cleaning_tasks")
+      .delete()
+      .in("booking_id", cancelledBookingIds)
+      .eq("status", "pending");
+    if (delErr) throw delErr;
+  }
+
+  return { fetched: bookings.length, synced: bookingRows.length, skippedNoRoom: [...new Set(skippedNoRoom)] };
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTのみ対応しています" });
+  }
+
+  try {
+    const results = {};
+    for (const [accountKey, refreshToken] of Object.entries(ACCOUNTS)) {
+      if (!refreshToken) continue;
+      results[accountKey] = await syncAccount(accountKey, refreshToken);
+    }
+    return res.status(200).json({ ok: true, synced: results });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+}
