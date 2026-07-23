@@ -214,7 +214,13 @@ function LockBadge({ unlocked, onUnlock, onLock }) {
   );
 }
 
-function AssigneeSelect({ value, unlocked, onChange, options, requestUnlock, small }) {
+function conflictColor(count) {
+  if (count >= 3) return "#2A5DB0";
+  if (count === 2) return "#C0392B";
+  return "#20302C";
+}
+
+function AssigneeSelect({ value, unlocked, onChange, options, requestUnlock, small, conflictCounts = {} }) {
   const list = value && !options.includes(value) ? [value, ...options] : options;
   return (
     <select
@@ -235,7 +241,7 @@ function AssigneeSelect({ value, unlocked, onChange, options, requestUnlock, sma
         border: BORDER,
         borderRadius: 6,
         padding: small ? "3px 4px" : "6px 8px",
-        color: value ? "#20302C" : "#B0AC9F",
+        color: value ? conflictColor(conflictCounts[value]) : "#B0AC9F",
         background: unlocked ? "#FAFAF9" : "#F1EFE7",
         cursor: unlocked ? "pointer" : "not-allowed",
         width: "100%",
@@ -243,14 +249,16 @@ function AssigneeSelect({ value, unlocked, onChange, options, requestUnlock, sma
     >
       <option value="">未設定</option>
       {list.map((n) => (
-        <option key={n} value={n}>{n}</option>
+        <option key={n} value={n} style={{ color: conflictColor(conflictCounts[n]) }}>
+          {n}{conflictCounts[n] >= 2 ? `（同日${conflictCounts[n]}件）` : ""}
+        </option>
       ))}
       <option value="__new__">＋ 新しい担当者を追加</option>
     </select>
   );
 }
 
-function TaskCard({ t, prop, unlocked, onCycle, onAssignee, onNotes, options, compact, requestUnlock }) {
+function TaskCard({ t, prop, unlocked, onCycle, onAssignee, onNotes, options, compact, requestUnlock, conflictCounts }) {
   const guard = (fn) => (...args) => { if (!unlocked) { requestUnlock(); return; } fn(...args); };
   const unassigned = !t.assignee;
   return (
@@ -297,7 +305,7 @@ function TaskCard({ t, prop, unlocked, onCycle, onAssignee, onNotes, options, co
         </button>
       )}
 
-      <AssigneeSelect value={t.assignee} unlocked={unlocked} onChange={(v) => onAssignee(t.id, v)} options={options} requestUnlock={requestUnlock} small={!compact} />
+      <AssigneeSelect value={t.assignee} unlocked={unlocked} onChange={(v) => onAssignee(t.id, v)} options={options} requestUnlock={requestUnlock} small={!compact} conflictCounts={conflictCounts} />
     </div>
   );
 }
@@ -352,11 +360,57 @@ export default function CleaningCalendar({
 
   const requestUnlock = () => alert("編集には社員のログインが必要です。右上の「🔒 閲覧のみ」ボタンからログインしてください。");
 
-  // シフト登録されている人だけを候補にする（当日チェックインが必要な場合は「当日チェックイン不可」フラグの人を除外）
-  const getEligibleStaff = (shiftAreaKey, iso, sameDayRequired) => {
+  const isTakobeyaName = (name) => /タコベヤ|takobeya/i.test(name || "");
+
+  // 「同日◯件」の数え方: Takobeya関連（本体＋共用部）はまとめて1件、それ以外は1件ごとに数える
+  const conflictCountsByDate = useMemo(() => {
+    const takobeyaAssigned = {};
+    const otherCounts = {};
+
+    tasks.forEach((t) => {
+      if (!t.assignee) return;
+      if (isTakobeyaName(t.propertyName)) {
+        takobeyaAssigned[t.date] = takobeyaAssigned[t.date] || {};
+        takobeyaAssigned[t.date][t.assignee] = true;
+      } else {
+        otherCounts[t.date] = otherCounts[t.date] || {};
+        otherCounts[t.date][t.assignee] = (otherCounts[t.date][t.assignee] || 0) + 1;
+      }
+    });
+
+    Object.entries(specialAssignees).forEach(([key, name]) => {
+      if (!name) return;
+      const [rowKey, iso] = key.split("|");
+      if (rowKey !== "takobeya_common") return;
+      takobeyaAssigned[iso] = takobeyaAssigned[iso] || {};
+      takobeyaAssigned[iso][name] = true;
+    });
+
+    const counts = {};
+    const allDates = new Set([...Object.keys(takobeyaAssigned), ...Object.keys(otherCounts)]);
+    allDates.forEach((date) => {
+      counts[date] = {};
+      const names = new Set([...Object.keys(takobeyaAssigned[date] || {}), ...Object.keys(otherCounts[date] || {})]);
+      names.forEach((name) => {
+        const tb = takobeyaAssigned[date]?.[name] ? 1 : 0;
+        const other = otherCounts[date]?.[name] || 0;
+        counts[date][name] = tb + other;
+      });
+    });
+    return counts;
+  }, [tasks, specialAssignees]);
+
+  // シフト登録されている人だけを候補にする（当日チェックインが必要な場合は「当日チェックイン不可」フラグの人を除外、
+  // すでにその日2件以上入っている場合は「同日2件以上OK」の人だけに絞る）
+  const getEligibleStaff = (shiftAreaKey, iso, sameDayRequired, currentAssignee) => {
+    const currentCount = (conflictCountsByDate[iso]?.[currentAssignee] || 0);
     const eligible = shiftsInWeek
       .filter((s) => s.shift_area === shiftAreaKey && s.date === iso && s.available)
       .filter((s) => !(sameDayRequired && s.no_same_day))
+      .filter((s) => {
+        const projected = (conflictCountsByDate[iso]?.[s.staff_name] || 0) + 1;
+        return projected < 2 || s.two_plus;
+      })
       .map((s) => s.staff_name);
     return eligible.length > 0 ? eligible : assigneeOptions; // 誰も登録がなければ全員から選べるようにしておく
   };
@@ -512,6 +566,7 @@ export default function CleaningCalendar({
                 onChange={(v) => changeSpecialAssignee(row.key, slotIdx, iso, v)}
                 options={getEligibleStaff(shiftAreaKeyForRow(row.key), iso, false)}
                 requestUnlock={requestUnlock}
+                conflictCounts={conflictCountsByDate[iso] || {}}
               />
             ))}
           </div>
@@ -533,6 +588,7 @@ export default function CleaningCalendar({
             onChange={(v) => changeSpecialAssignee(row.key, slotIdx, iso, v)}
             options={getEligibleStaff(shiftAreaKeyForRow(row.key), iso, false)}
             requestUnlock={requestUnlock}
+            conflictCounts={conflictCountsByDate[iso] || {}}
           />
         ))}
       </div>
@@ -576,7 +632,7 @@ export default function CleaningCalendar({
             }}
             style={{ border: BORDER, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
           />
-         {unlocked && <a href={showHidden ? "/" : "/?showHidden=1"} style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}>{showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}</a>}
+          {unlocked && <a href={showHidden ? "/" : "/?showHidden=1"} style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}>{showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}</a>}
         </div>
         <div style={{ display: "flex", gap: 6, background: "#E9E6DC", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
           {AREAS.map((a) => (
@@ -639,7 +695,7 @@ export default function CleaningCalendar({
                   const t = filteredTasks.find((x) => x.propertyId === prop.id && x.date === iso);
                   if (!t) return null;
                   return (
-                    <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} />
+                    <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} conflictCounts={conflictCountsByDate[t.date] || {}} />
                   );
                 })}
             {specialRowsForArea.map((row) => renderSpecialRowMobile(row))}
@@ -689,7 +745,7 @@ export default function CleaningCalendar({
                           <div style={{ fontSize: 11, color: "#C9C5B8", textAlign: "center" }}>—</div>
                         ) : (
                           dayTasks.map((t) => (
-                            <TaskCard key={t.id} t={t} prop={prop} unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} />
+                            <TaskCard key={t.id} t={t} prop={prop} unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} conflictCounts={conflictCountsByDate[t.date] || {}} />
                           ))
                         )}
                       </div>
@@ -704,7 +760,7 @@ export default function CleaningCalendar({
       )}
 
       <div style={{ marginTop: 18, fontSize: 11, color: "#8A8578" }}>
-        ステータスはクリックで「未清掃⇔完了」を切り替えられます。「要確認」は担当者が未選択のときに自動表示されます。物件名の▲▼で並び替え、✏️でアメニティを編集できます（ログイン時のみ）。
+        ステータスはクリックで「未清掃⇔完了」を切り替えられます。「要確認」は担当者が未選択のときに自動表示されます。物件名の▲▼で並び替え、✏️でアメニティを編集できます（ログイン時のみ）。担当者名の後ろの「同日◯件」は、同じ人が同日に何件入っているかの目安です（2件目以降のみ表示。2件=赤、3件以上=青。Takobeyaは本体+共用部をまとめて1件として数えます）。
       </div>
     </div>
   );
