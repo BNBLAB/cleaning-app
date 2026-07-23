@@ -24,8 +24,8 @@ export async function getServerSideProps({ query }) {
     year = y;
     month = m;
   }
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 0));
   const monthStartISO = toISO(monthStart);
   const monthEndISO = toISO(monthEnd);
 
@@ -111,10 +111,10 @@ export default function StaffSummaryPage({ year, month, entries, counts }) {
   const next = addMonths(year, month, 1);
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
 
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 0));
   const monthDays = [];
-  for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) monthDays.push(new Date(d));
+  for (let d = new Date(monthStart); d <= monthEnd; d.setUTCDate(d.getUTCDate() + 1)) monthDays.push(new Date(d));
 
   const selectedEntries = selectedName
     ? entries.filter((e) => e.name === selectedName).sort((a, b) => a.date.localeCompare(b.date))
@@ -172,13 +172,13 @@ export default function StaffSummaryPage({ year, month, entries, counts }) {
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>{selectedName}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 12 }}>
               {WEEKDAY_JA.map((w) => <div key={w} style={{ textAlign: "center", fontSize: 11, color: "#8A8578" }}>{w}</div>)}
-              {Array.from({ length: monthDays[0].getDay() }).map((_, i) => <div key={"pad" + i} />)}
+              {Array.from({ length: monthDays[0].getUTCDay() }).map((_, i) => <div key={"pad" + i} />)}
               {monthDays.map((d) => {
                 const iso = toISO(d);
                 const hit = selectedDates.has(iso);
                 return (
                   <div key={iso} style={{ textAlign: "center", padding: "6px 0", borderRadius: 8, background: hit ? "#20302C" : "#F1EFE7", color: hit ? "#F6F5F1" : "#8A8578", fontSize: 12, fontWeight: hit ? 700 : 400 }}>
-                    {d.getDate()}
+                    {d.getUTCDate()}
                   </div>
                 );
               })}
