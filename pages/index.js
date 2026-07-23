@@ -132,6 +132,23 @@ export async function getServerSideProps({ query }) {
   tasks.forEach((t) => t.assignee && assigneeSet.add(t.assignee));
   (specialRows ?? []).forEach((r) => r.assignee && assigneeSet.add(r.assignee));
 
+  // シフト登録（担当者プルダウンの絞り込みに使う）
+  const { data: shiftsInWeek } = await supabase
+    .from("shifts")
+    .select("shift_area, staff_name, date, available, two_plus, no_same_day")
+    .gte("date", weekStartISO)
+    .lte("date", weekEndISO)
+    .eq("available", true);
+
+  // 手動予約追加のフォーム用に部屋一覧を取得
+  const { data: rooms } = await supabase
+    .from("rooms")
+    .select("id, name, property_id, properties ( name, active )")
+    .order("name", { ascending: true });
+  const roomOptions = (rooms ?? [])
+    .filter((r) => r.properties?.active !== false)
+    .map((r) => ({ id: r.id, name: r.name, propertyId: r.property_id, propertyName: r.properties?.name ?? "" }));
+
   return {
     props: {
       tasks,
@@ -142,11 +159,13 @@ export async function getServerSideProps({ query }) {
       showHidden,
       errorMessage: null,
       assigneeOptions: Array.from(assigneeSet),
+      shiftsInWeek: shiftsInWeek ?? [],
+      roomOptions,
     },
   };
 }
 
-export default function Home({ tasks, properties, specialAssignees, today, weekStart, showHidden, errorMessage, assigneeOptions }) {
+export default function Home({ tasks, properties, specialAssignees, today, weekStart, showHidden, errorMessage, assigneeOptions, shiftsInWeek, roomOptions }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
@@ -231,6 +250,19 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
     window.location.reload();
   };
 
+  const onAddManualBooking = async (fields) => {
+    const res = await fetch("/api/bookings/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "追加に失敗しました");
+    }
+    window.location.reload();
+  };
+
   return (
     <div>
       <div style={{ padding: "16px 24px 0", display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
@@ -268,6 +300,8 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
         weekStart={weekStart}
         showHidden={showHidden}
         assigneeOptions={assigneeOptions}
+        shiftsInWeek={shiftsInWeek}
+        roomOptions={roomOptions}
         onStatusChange={onStatusChange}
         onAssigneeChange={onAssigneeChange}
         onNotesChange={onNotesChange}
@@ -275,6 +309,7 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
         onReorder={onReorder}
         onAmenitiesChange={onAmenitiesChange}
         onPropertyUpdate={onPropertyUpdate}
+        onAddManualBooking={onAddManualBooking}
       />
     </div>
   );
