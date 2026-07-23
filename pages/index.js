@@ -191,7 +191,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
   };
 
   const onAssigneeChange = async (taskId, assignee) => {
@@ -200,7 +203,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ assignee }),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
   };
 
   const onNotesChange = async (taskId, notes) => {
@@ -209,7 +215,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes }),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
   };
 
   const onSpecialAssigneeChange = async (rowKey, slotIndex, date, assignee) => {
@@ -218,7 +227,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rowKey, slotIndex, date, assignee }),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
   };
 
   const onReorder = async (propertyId, direction) => {
@@ -237,7 +249,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amenities }),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
   };
 
   const onPropertyUpdate = async (propertyId, fields) => {
@@ -246,7 +261,10 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fields),
     });
-    if (!res.ok) throw new Error("更新失敗");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "更新失敗");
+    }
     window.location.reload();
   };
 
@@ -294,23 +312,3 @@ export default function Home({ tasks, properties, specialAssignees, today, weekS
 
       <CleaningCalendar
         tasks={tasks}
-        properties={properties}
-        specialAssignees={specialAssignees}
-        today={today}
-        weekStart={weekStart}
-        showHidden={showHidden}
-        assigneeOptions={assigneeOptions}
-        shiftsInWeek={shiftsInWeek}
-        roomOptions={roomOptions}
-        onStatusChange={onStatusChange}
-        onAssigneeChange={onAssigneeChange}
-        onNotesChange={onNotesChange}
-        onSpecialAssigneeChange={onSpecialAssigneeChange}
-        onReorder={onReorder}
-        onAmenitiesChange={onAmenitiesChange}
-        onPropertyUpdate={onPropertyUpdate}
-        onAddManualBooking={onAddManualBooking}
-      />
-    </div>
-  );
-}
