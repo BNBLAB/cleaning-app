@@ -214,6 +214,7 @@ export default function CleaningCalendar({
   specialAssignees: initialSpecialAssignees,
   today: todayISO,
   weekStart: weekStartISO,
+  showHidden = false,
   assigneeOptions = [],
   onStatusChange,
   onAssigneeChange,
@@ -221,6 +222,7 @@ export default function CleaningCalendar({
   onSpecialAssigneeChange,
   onReorder,
   onAmenitiesChange,
+  onPropertyUpdate,
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [specialAssignees, setSpecialAssignees] = useState(initialSpecialAssignees);
@@ -336,6 +338,29 @@ export default function CleaningCalendar({
     }
   };
 
+  const handleRename = async (prop) => {
+    if (!unlocked) return requestUnlock();
+    const input = window.prompt("施設名を入力してください", prop.name);
+    if (input === null || !input.trim()) return;
+    try {
+      if (onPropertyUpdate) await onPropertyUpdate(prop.id, { name: input.trim() });
+    } catch (e) {
+      alert("名前の更新に失敗しました。");
+    }
+  };
+
+  const handleToggleActive = async (prop) => {
+    if (!unlocked) return requestUnlock();
+    const hiding = prop.active !== false;
+    const msg = hiding ? `「${prop.name}」を一覧から非表示にしますか？` : `「${prop.name}」を再表示しますか？`;
+    if (!window.confirm(msg)) return;
+    try {
+      if (onPropertyUpdate) await onPropertyUpdate(prop.id, { active: !hiding });
+    } catch (e) {
+      alert("更新に失敗しました。");
+    }
+  };
+
   const todayCounts = useMemo(() => {
     const todayTasks = filteredTasks.filter((t) => t.date === toISO(today));
     const c = { pending: 0, done: 0, needs_check: 0 };
@@ -417,6 +442,14 @@ export default function CleaningCalendar({
             }}
             style={{ border: BORDER, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
           />
+          {unlocked && (
+            
+              href={showHidden ? "/" : "/?showHidden=1"}
+              style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}
+            >
+              {showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}
+            </a>
+          )}
         </div>
         <div style={{ display: "flex", gap: 6, background: "#E9E6DC", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
           {AREAS.map((a) => (
@@ -502,15 +535,19 @@ export default function CleaningCalendar({
             {showPropertyGrid &&
               visibleProperties.map((prop, propIdx) => (
                 <React.Fragment key={prop.id}>
-                  <div style={{ padding: "10px 12px", borderBottom: BORDER, borderRight: BORDER, background: propIdx % 2 === 0 ? "#FFFFFF" : "#FAFAF7" }}>
+                  <div style={{ padding: "10px 12px", borderBottom: BORDER, borderRight: BORDER, background: prop.active === false ? "#F1EFE7" : propIdx % 2 === 0 ? "#FFFFFF" : "#FAFAF7", opacity: prop.active === false ? 0.6 : 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#20302C" }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: prop.color, display: "inline-block", flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>{prop.name}</span>
+                      <span style={{ flex: 1 }}>{prop.name}{prop.active === false && <span style={{ fontSize: 10, color: "#C24A4A", marginLeft: 6 }}>(非表示中)</span>}</span>
                       {unlocked && (
                         <div style={{ display: "flex", gap: 2 }}>
                           <button onClick={() => handleReorder(prop.id, "up")} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: "#8A8578", padding: "0 2px" }} title="上へ">▲</button>
                           <button onClick={() => handleReorder(prop.id, "down")} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: "#8A8578", padding: "0 2px" }} title="下へ">▼</button>
+                          <button onClick={() => handleRename(prop)} style={{ all: "unset", cursor: "pointer", fontSize: 11, color: "#8A8578", padding: "0 2px" }} title="名前を変更">🏷️</button>
                           <button onClick={() => handleAmenitiesEdit(prop)} style={{ all: "unset", cursor: "pointer", fontSize: 11, color: "#8A8578", padding: "0 2px" }} title="アメニティ編集">✏️</button>
+                          <button onClick={() => handleToggleActive(prop)} style={{ all: "unset", cursor: "pointer", fontSize: 11, color: "#8A8578", padding: "0 2px" }} title={prop.active === false ? "再表示する" : "非表示にする"}>
+                            {prop.active === false ? "👁" : "🙈"}
+                          </button>
                         </div>
                       )}
                     </div>
