@@ -442,7 +442,7 @@ export default function CleaningCalendar({
             }}
             style={{ border: BORDER, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
           />
-          {unlocked && (
+         {unlocked && (
             
               href={showHidden ? "/" : "/?showHidden=1"}
               style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}
