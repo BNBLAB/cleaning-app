@@ -63,6 +63,104 @@ function cardBorder(t) {
 const pillBtn = { border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans JP', sans-serif" };
 const navBtnStyle = { border: BORDER, borderRadius: 8, padding: "7px 12px", fontSize: 13, background: "#FFFFFF", color: "#3B3833", cursor: "pointer", fontFamily: "'Noto Sans JP', sans-serif", textDecoration: "none", display: "inline-block" };
 
+function AddBookingModal({ roomOptions, onClose, onSave }) {
+  const grouped = useMemo(() => {
+    const map = new Map();
+    roomOptions.forEach((r) => {
+      if (!map.has(r.propertyId)) map.set(r.propertyId, { name: r.propertyName, rooms: [] });
+      map.get(r.propertyId).rooms.push(r);
+    });
+    return Array.from(map.values());
+  }, [roomOptions]);
+
+  const [roomId, setRoomId] = useState(roomOptions[0]?.id ?? "");
+  const [guestName, setGuestName] = useState("");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+
+  const canSave = roomId && guestName.trim() && checkIn && checkOut && checkOut > checkIn;
+
+  const submit = async () => {
+    setBusy(true);
+    setErrMsg("");
+    try {
+      await onSave({ roomId, guestName: guestName.trim(), checkIn, checkOut, adults, children, notes: notes.trim() || null });
+    } catch (e) {
+      setErrMsg(e.message || "追加に失敗しました");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(30,36,34,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 12 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: 20, width: "min(420px, 94vw)", maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#20302C" }}>予約を手動で追加</div>
+        <div style={{ fontSize: 11, color: "#8A8578" }}>社長・社員が直接利用する場合など、BEDS24を通さない予約をここから登録できます。</div>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700 }}>
+          部屋
+          <select value={roomId} onChange={(e) => setRoomId(e.target.value)} style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }}>
+            {grouped.map((g) => (
+              <optgroup key={g.name} label={g.name}>
+                {g.rooms.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700 }}>
+          利用者名
+          <input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="例: 社長利用" style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+        </label>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700, flex: 1 }}>
+            チェックイン
+            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700, flex: 1 }}>
+            チェックアウト
+            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700, flex: 1 }}>
+            大人
+            <input type="number" min={0} value={adults} onChange={(e) => setAdults(Number(e.target.value))} style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700, flex: 1 }}>
+            子供
+            <input type="number" min={0} value={children} onChange={(e) => setChildren(Number(e.target.value))} style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+          </label>
+        </div>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#5C5850", fontWeight: 700 }}>
+          備考（任意）
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="例: 社長が私用で利用" style={{ border: BORDER, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 400 }} />
+        </label>
+
+        {errMsg && <div style={{ fontSize: 11, color: "#C24A4A" }}>{errMsg}</div>}
+        {checkIn && checkOut && checkOut <= checkIn && <div style={{ fontSize: 11, color: "#C24A4A" }}>チェックアウトはチェックインより後の日付にしてください。</div>}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose} style={{ ...pillBtn, background: "#F1EFE7", color: "#5C5850" }}>キャンセル</button>
+          <button disabled={!canSave || busy} onClick={submit} style={{ ...pillBtn, background: canSave ? "#20302C" : "#C9C5B8", color: "#F6F5F1", cursor: canSave ? "pointer" : "not-allowed" }}>
+            {busy ? "追加中..." : "追加する"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LockBadge({ unlocked, onUnlock, onLock }) {
   const [showInput, setShowInput] = useState(false);
   const [pw, setPw] = useState("");
@@ -216,6 +314,8 @@ export default function CleaningCalendar({
   weekStart: weekStartISO,
   showHidden = false,
   assigneeOptions = [],
+  shiftsInWeek = [],
+  roomOptions = [],
   onStatusChange,
   onAssigneeChange,
   onNotesChange,
@@ -223,6 +323,7 @@ export default function CleaningCalendar({
   onReorder,
   onAmenitiesChange,
   onPropertyUpdate,
+  onAddManualBooking,
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [specialAssignees, setSpecialAssignees] = useState(initialSpecialAssignees);
@@ -230,6 +331,7 @@ export default function CleaningCalendar({
   const [unlocked, setUnlocked] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
+  const [showAddBooking, setShowAddBooking] = useState(false);
 
   useEffect(() => {
     setUnlocked(localStorage.getItem("cleaningAppUnlocked") === "1");
@@ -249,6 +351,15 @@ export default function CleaningCalendar({
   };
 
   const requestUnlock = () => alert("編集には社員のログインが必要です。右上の「🔒 閲覧のみ」ボタンからログインしてください。");
+
+  // シフト登録されている人だけを候補にする（当日チェックインが必要な場合は「当日チェックイン不可」フラグの人を除外）
+  const getEligibleStaff = (shiftAreaKey, iso, sameDayRequired) => {
+    const eligible = shiftsInWeek
+      .filter((s) => s.shift_area === shiftAreaKey && s.date === iso && s.available)
+      .filter((s) => !(sameDayRequired && s.no_same_day))
+      .map((s) => s.staff_name);
+    return eligible.length > 0 ? eligible : assigneeOptions; // 誰も登録がなければ全員から選べるようにしておく
+  };
 
   const today = useMemo(() => new Date(todayISO + "T00:00:00"), [todayISO]);
   const weekStart = useMemo(() => new Date(weekStartISO + "T00:00:00"), [weekStartISO]);
@@ -361,6 +472,10 @@ export default function CleaningCalendar({
     }
   };
 
+  const handleAddBooking = async (fields) => {
+    if (onAddManualBooking) await onAddManualBooking(fields);
+  };
+
   const todayCounts = useMemo(() => {
     const todayTasks = filteredTasks.filter((t) => t.date === toISO(today));
     const c = { pending: 0, done: 0, needs_check: 0 };
@@ -373,6 +488,12 @@ export default function CleaningCalendar({
   const todayHref = "/";
 
   const showPropertyGrid = area !== "message";
+
+  const shiftAreaKeyForRow = (rowKey) => {
+    if (rowKey === "special_cleaning") return "futtsu";
+    if (rowKey === "message_parttime" || rowKey === "message_staff") return "message";
+    return "hatagaya";
+  };
 
   const renderSpecialRowDesktop = (row, rowIdx, offset) => (
     <React.Fragment key={row.key}>
@@ -389,7 +510,7 @@ export default function CleaningCalendar({
                 value={specialAssignees[`${row.key}|${iso}|${slotIdx}`]}
                 unlocked={unlocked}
                 onChange={(v) => changeSpecialAssignee(row.key, slotIdx, iso, v)}
-                options={assigneeOptions}
+                options={getEligibleStaff(shiftAreaKeyForRow(row.key), iso, false)}
                 requestUnlock={requestUnlock}
               />
             ))}
@@ -410,7 +531,7 @@ export default function CleaningCalendar({
             value={specialAssignees[`${row.key}|${iso}|${slotIdx}`]}
             unlocked={unlocked}
             onChange={(v) => changeSpecialAssignee(row.key, slotIdx, iso, v)}
-            options={assigneeOptions}
+            options={getEligibleStaff(shiftAreaKeyForRow(row.key), iso, false)}
             requestUnlock={requestUnlock}
           />
         ))}
@@ -422,12 +543,25 @@ export default function CleaningCalendar({
     <div style={{ background: "#F6F5F1", minHeight: "100%", padding: isMobile ? 14 : 24, fontFamily: "'Noto Sans JP', sans-serif", color: "#1E2422" }}>
       <style>{FONT_IMPORT}</style>
 
+      {showAddBooking && (
+        <AddBookingModal roomOptions={roomOptions} onClose={() => setShowAddBooking(false)} onSave={async (fields) => { await handleAddBooking(fields); setShowAddBooking(false); }} />
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: 2, color: "#8A8578", fontFamily: "'JetBrains Mono', monospace" }}>SHOEI CLEANING OPERATIONS</div>
           <h1 style={{ fontFamily: "'Zen Kaku Gothic New', sans-serif", fontWeight: 900, fontSize: isMobile ? 22 : 26, margin: "2px 0 0", color: "#20302C" }}>清掃カレンダー</h1>
         </div>
-        <LockBadge unlocked={unlocked} onUnlock={unlock} onLock={lock} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {unlocked && (
+            <>
+              <a href="/shifts" style={{ ...navBtnStyle, background: "#F1EFE7" }}>🗓 シフト管理</a>
+              <a href="/staff-summary" style={{ ...navBtnStyle, background: "#F1EFE7" }}>👤 スタッフ集計</a>
+              <button onClick={() => setShowAddBooking(true)} style={{ ...pillBtn, background: "#20302C", color: "#F6F5F1" }}>＋ 予約を手動追加</button>
+            </>
+          )}
+          <LockBadge unlocked={unlocked} onUnlock={unlock} onLock={lock} />
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 10, marginBottom: 16 }}>
@@ -442,7 +576,14 @@ export default function CleaningCalendar({
             }}
             style={{ border: BORDER, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
           />
-       {unlocked && <a href={showHidden ? "/" : "/?showHidden=1"} style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}>{showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}</a>}
+          {unlocked && (
+            
+              href={showHidden ? "/" : "/?showHidden=1"}
+              style={{ ...navBtnStyle, background: showHidden ? "#20302C" : "#FFFFFF", color: showHidden ? "#F6F5F1" : "#3B3833" }}
+            >
+              {showHidden ? "非表示物件を隠す" : "👁 非表示物件を管理"}
+            </a>
+          )}
         </div>
         <div style={{ display: "flex", gap: 6, background: "#E9E6DC", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
           {AREAS.map((a) => (
@@ -505,7 +646,7 @@ export default function CleaningCalendar({
                   const t = filteredTasks.find((x) => x.propertyId === prop.id && x.date === iso);
                   if (!t) return null;
                   return (
-                    <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={assigneeOptions} />
+                    <TaskCard key={t.id} t={t} prop={prop} compact unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} />
                   );
                 })}
             {specialRowsForArea.map((row) => renderSpecialRowMobile(row))}
@@ -555,7 +696,7 @@ export default function CleaningCalendar({
                           <div style={{ fontSize: 11, color: "#C9C5B8", textAlign: "center" }}>—</div>
                         ) : (
                           dayTasks.map((t) => (
-                            <TaskCard key={t.id} t={t} prop={prop} unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={assigneeOptions} />
+                            <TaskCard key={t.id} t={t} prop={prop} unlocked={unlocked} requestUnlock={requestUnlock} onCycle={cycleStatus} onAssignee={changeAssignee} onNotes={changeNotes} options={getEligibleStaff(t.area, t.date, t.sameDayCheckin)} />
                           ))
                         )}
                       </div>
