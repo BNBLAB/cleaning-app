@@ -8,15 +8,35 @@ function nightsBetween(checkIn, checkOut) {
   const b = new Date(checkOut + "T00:00:00");
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 }
+function toISO(d) {
+  return d.toISOString().slice(0, 10);
+}
+function addDays(base, n) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
 
-export async function getServerSideProps() {
+export async function getServerSideProps({ query }) {
   const supabase = supabaseServer();
 
-  const today = new Date();
-  const in14days = new Date(today);
-  in14days.setDate(in14days.getDate() + 14);
-  const todayISO = today.toISOString().slice(0, 10);
-  const in14ISO = in14days.toISOString().slice(0, 10);
+  const todayReal = new Date();
+  todayReal.setHours(0, 0, 0, 0);
+  const todayISO = toISO(todayReal);
+
+  // ?start=YYYY-MM-DD があればその週を表示。無ければ今日から7日間。
+  let weekStart = todayReal;
+  if (query.start && /^\d{4}-\d{2}-\d{2}$/.test(query.start)) {
+    weekStart = new Date(query.start + "T00:00:00");
+  }
+  const weekStartISO = toISO(weekStart);
+  const weekEndISO = toISO(addDays(weekStart, 6));
+
+  // 物件一覧（並び順つき）
+  const { data: properties } = await supabase
+    .from("properties")
+    .select("id, name, area, amenities, sort_order")
+    .order("sort_order", { ascending: true });
 
   const { data, error } = await supabase
     .from("cleaning_tasks")
@@ -33,12 +53,22 @@ export async function getServerSideProps() {
       bookings ( check_in, check_out, guest_name, num_adult, num_child )
     `
     )
-    .gte("scheduled_date", todayISO)
-    .lte("scheduled_date", in14ISO)
+    .gte("scheduled_date", weekStartISO)
+    .lte("scheduled_date", weekEndISO)
     .order("scheduled_date", { ascending: true });
 
   if (error) {
-    return { props: { tasks: [], today: todayISO, errorMessage: error.message, assigneeOptions: [] } };
+    return {
+      props: {
+        tasks: [],
+        properties: properties ?? [],
+        specialAssignees: {},
+        today: todayISO,
+        weekStart: weekStartISO,
+        errorMessage: error.message,
+        assigneeOptions: [],
+      },
+    };
   }
 
   const roomIds = Array.from(new Set((data ?? []).map((t) => t.room_id).filter(Boolean)));
@@ -50,7 +80,7 @@ export async function getServerSideProps() {
       .select("room_id, check_in, check_out, num_adult, num_child, status")
       .in("room_id", roomIds)
       .neq("status", "cancelled")
-      .gte("check_in", todayISO)
+      .gte("check_in", weekStartISO)
       .order("check_in", { ascending: true });
 
     (upcoming ?? []).forEach((b) => {
@@ -58,9 +88,6 @@ export async function getServerSideProps() {
       nextBookingsByRoom[b.room_id].push(b);
     });
   }
-
-  const assigneeSet = new Set();
-  (data ?? []).forEach((t) => t.assignee && assigneeSet.add(t.assignee));
 
   const tasks = (data ?? []).map((t) => {
     const departing = t.bookings;
@@ -77,28 +104,45 @@ export async function getServerSideProps() {
       propertyId: t.rooms?.properties?.id ?? "unknown",
       propertyName: t.rooms?.properties?.name ?? "(不明な施設)",
       area: t.rooms?.properties?.area ?? "hatagaya",
-      amenities: t.rooms?.properties?.amenities ?? null,
       roomName: t.rooms?.name ?? "",
       guestName: departing?.guest_name ?? null,
       prevGuests: departing ? (departing.num_adult ?? 0) + (departing.num_child ?? 0) : null,
       prevNights: departing ? nightsBetween(departing.check_in, departing.check_out) : null,
       nextGuests: next ? (next.num_adult ?? 0) + (next.num_child ?? 0) : null,
       nextNights: next ? nightsBetween(next.check_in, next.check_out) : null,
-      nextCheckIn: next ? next.check_in : null,
     };
   });
+
+  // 特別枠（Takobeya共用部・エントランス・事務バイト・メッセージバイト等）
+  const { data: specialRows } = await supabase
+    .from("special_task_assignments")
+    .select("row_key, slot_index, date, assignee")
+    .gte("date", weekStartISO)
+    .lte("date", weekEndISO);
+
+  const specialAssignees = {};
+  (specialRows ?? []).forEach((r) => {
+    specialAssignees[`${r.row_key}|${r.date}|${r.slot_index}`] = r.assignee;
+  });
+
+  const assigneeSet = new Set();
+  tasks.forEach((t) => t.assignee && assigneeSet.add(t.assignee));
+  (specialRows ?? []).forEach((r) => r.assignee && assigneeSet.add(r.assignee));
 
   return {
     props: {
       tasks,
+      properties: properties ?? [],
+      specialAssignees,
       today: todayISO,
+      weekStart: weekStartISO,
       errorMessage: null,
       assigneeOptions: Array.from(assigneeSet),
     },
   };
 }
 
-export default function Home({ tasks, today, errorMessage, assigneeOptions }) {
+export default function Home({ tasks, properties, specialAssignees, today, weekStart, errorMessage, assigneeOptions }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
@@ -145,6 +189,34 @@ export default function Home({ tasks, today, errorMessage, assigneeOptions }) {
     if (!res.ok) throw new Error("更新失敗");
   };
 
+  const onSpecialAssigneeChange = async (rowKey, slotIndex, date, assignee) => {
+    const res = await fetch("/api/special-tasks/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rowKey, slotIndex, date, assignee }),
+    });
+    if (!res.ok) throw new Error("更新失敗");
+  };
+
+  const onReorder = async (propertyId, direction) => {
+    const res = await fetch("/api/properties/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ propertyId, direction }),
+    });
+    if (!res.ok) throw new Error("並び替えに失敗しました");
+    window.location.reload();
+  };
+
+  const onAmenitiesChange = async (propertyId, amenities) => {
+    const res = await fetch(`/api/properties/${propertyId}/amenities`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amenities }),
+    });
+    if (!res.ok) throw new Error("更新失敗");
+  };
+
   return (
     <div>
       <div style={{ padding: "16px 24px 0", display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
@@ -176,11 +248,17 @@ export default function Home({ tasks, today, errorMessage, assigneeOptions }) {
 
       <CleaningCalendar
         tasks={tasks}
+        properties={properties}
+        specialAssignees={specialAssignees}
         today={today}
+        weekStart={weekStart}
         assigneeOptions={assigneeOptions}
         onStatusChange={onStatusChange}
         onAssigneeChange={onAssigneeChange}
         onNotesChange={onNotesChange}
+        onSpecialAssigneeChange={onSpecialAssigneeChange}
+        onReorder={onReorder}
+        onAmenitiesChange={onAmenitiesChange}
       />
     </div>
   );
