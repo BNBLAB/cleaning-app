@@ -39,17 +39,17 @@ const BORDER = "1px solid #DEDACE";
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 function formatMonthDay(d) {
-  return `${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAY_JA[d.getDay()]})`;
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日(${WEEKDAY_JA[d.getUTCDay()]})`;
 }
 function formatWeekdayShort(d) {
-  return WEEKDAY_JA[d.getDay()];
+  return WEEKDAY_JA[d.getUTCDay()];
 }
 function toISO(d) {
   return d.toISOString().slice(0, 10);
 }
 function addDays(base, n) {
   const d = new Date(base);
-  d.setDate(d.getDate() + n);
+  d.setUTCDate(d.getUTCDate() + n);
   return d;
 }
 function cardBorder(t) {
@@ -415,8 +415,8 @@ export default function CleaningCalendar({
     return eligible.length > 0 ? eligible : assigneeOptions; // 誰も登録がなければ全員から選べるようにしておく
   };
 
-  const today = useMemo(() => new Date(todayISO + "T00:00:00"), [todayISO]);
-  const weekStart = useMemo(() => new Date(weekStartISO + "T00:00:00"), [weekStartISO]);
+  const today = useMemo(() => new Date(todayISO + "T00:00:00Z"), [todayISO]);
+  const weekStart = useMemo(() => new Date(weekStartISO + "T00:00:00Z"), [weekStartISO]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const filteredTasks = useMemo(() => {
@@ -675,7 +675,7 @@ export default function CleaningCalendar({
               return (
                 <button key={toISO(d)} onClick={() => setSelectedDayIdx(i)} style={{ flex: "0 0 auto", border: isToday ? "1.5px solid #20302C" : BORDER, borderRadius: 10, padding: "8px 12px", background: selected ? "#20302C" : "#FFFFFF", color: selected ? "#F6F5F1" : "#3B3833", textAlign: "center", cursor: "pointer" }}>
                   <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", opacity: 0.8 }}>{formatWeekdayShort(d)}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700 }}>{d.getDate()}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>{d.getUTCDate()}</div>
                 </button>
               );
             })}
@@ -710,7 +710,7 @@ export default function CleaningCalendar({
               return (
                 <div key={toISO(d)} style={{ textAlign: "center", padding: "10px 0", borderBottom: BORDER, borderRight: BORDER, background: isToday ? "#20302C" : "#F1EFE7", color: isToday ? "#F6F5F1" : "#5C5850" }}>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, opacity: 0.75 }}>{formatWeekdayShort(d)}</div>
-                  <div style={{ fontFamily: "'Zen Kaku Gothic New', sans-serif", fontWeight: 700, fontSize: 16 }}>{d.getDate()}</div>
+                  <div style={{ fontFamily: "'Zen Kaku Gothic New', sans-serif", fontWeight: 700, fontSize: 16 }}>{d.getUTCDate()}</div>
                 </div>
               );
             })}
