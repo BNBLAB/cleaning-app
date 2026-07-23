@@ -451,7 +451,7 @@ export default function CleaningCalendar({
       if (onStatusChange) await onStatusChange(taskId, next);
     } catch (e) {
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)));
-      alert("ステータスの更新に失敗しました。");
+      alert("ステータスの更新に失敗しました: " + (e.message || ""));
     }
   };
 
@@ -460,7 +460,7 @@ export default function CleaningCalendar({
     try {
       if (onAssigneeChange) await onAssigneeChange(taskId, value || null);
     } catch (e) {
-      alert("担当者の更新に失敗しました。");
+      alert("担当者の更新に失敗しました: " + (e.message || ""));
     }
   };
 
@@ -469,7 +469,7 @@ export default function CleaningCalendar({
     try {
       if (onNotesChange) await onNotesChange(taskId, notes || null);
     } catch (e) {
-      alert("備考の更新に失敗しました。");
+      alert("備考の更新に失敗しました: " + (e.message || ""));
     }
   };
 
@@ -478,7 +478,7 @@ export default function CleaningCalendar({
     try {
       if (onSpecialAssigneeChange) await onSpecialAssigneeChange(rowKey, slotIndex, iso, value || null);
     } catch (e) {
-      alert("担当者の更新に失敗しました。");
+      alert("担当者の更新に失敗しました: " + (e.message || ""));
     }
   };
 
