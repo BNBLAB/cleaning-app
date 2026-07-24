@@ -344,8 +344,19 @@ export default function CleaningCalendar({
   onPropertyUpdate,
   onAddManualBooking,
 }) {
-  const [tasks, setTasks] = useState(initialTasks);
-  const [specialAssignees, setSpecialAssignees] = useState(initialSpecialAssignees);
+  // 何らかの理由でデータが渡ってこなくても絶対に落ちないように、ここで型を矯正しておく
+  initialTasks = Array.isArray(initialTasks) ? initialTasks : [];
+  initialProperties = Array.isArray(initialProperties) ? initialProperties : [];
+  initialSpecialAssignees = initialSpecialAssignees && typeof initialSpecialAssignees === "object" ? initialSpecialAssignees : {};
+  assigneeOptions = Array.isArray(assigneeOptions) ? assigneeOptions : [];
+  shiftsInWeek = Array.isArray(shiftsInWeek) ? shiftsInWeek : [];
+  roomOptions = Array.isArray(roomOptions) ? roomOptions : [];
+  stays = Array.isArray(stays) ? stays : [];
+  todayISO = todayISO || "2026-01-01";
+  weekStartISO = weekStartISO || "2026-01-01";
+
+  const [tasks, setTasks] = useState(() => (Array.isArray(initialTasks) ? initialTasks : []));
+  const [specialAssignees, setSpecialAssignees] = useState(() => (initialSpecialAssignees && typeof initialSpecialAssignees === "object" ? initialSpecialAssignees : {}));
   const [area, setArea] = useState("all");
   const [unlocked, setUnlocked] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -373,7 +384,6 @@ export default function CleaningCalendar({
 
   const isTakobeyaName = (name) => /タコベヤ|takobeya/i.test(name || "");
 
-  // 「同日◯件」の数え方: Takobeya関連（本体＋共用部）はまとめて1件、それ以外は1件ごとに数える
   const conflictCountsByDate = useMemo(() => {
     const takobeyaAssigned = {};
     const otherCounts = {};
@@ -411,8 +421,6 @@ export default function CleaningCalendar({
     return counts;
   }, [tasks, specialAssignees]);
 
-  // シフト登録されている人だけを候補にする（当日チェックインが必要な場合は「当日チェックイン不可」フラグの人を除外、
-  // すでにその日2件以上入っている場合は「同日2件以上OK」の人だけに絞る）
   const getEligibleStaff = (shiftAreaKey, iso, sameDayRequired, currentAssignee) => {
     const currentCount = (conflictCountsByDate[iso]?.[currentAssignee] || 0);
     const eligible = shiftsInWeek
