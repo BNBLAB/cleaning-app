@@ -344,7 +344,6 @@ export default function CleaningCalendar({
   onPropertyUpdate,
   onAddManualBooking,
 }) {
-  // 何らかの理由でデータが渡ってこなくても絶対に落ちないように、ここで型を矯正しておく
   initialTasks = Array.isArray(initialTasks) ? initialTasks : [];
   initialProperties = Array.isArray(initialProperties) ? initialProperties : [];
   initialSpecialAssignees = initialSpecialAssignees && typeof initialSpecialAssignees === "object" ? initialSpecialAssignees : {};
@@ -385,40 +384,46 @@ export default function CleaningCalendar({
   const isTakobeyaName = (name) => /タコベヤ|takobeya/i.test(name || "");
 
   const conflictCountsByDate = useMemo(() => {
-    const takobeyaAssigned = {};
-    const otherCounts = {};
+    try {
+      const safeTasks = Array.isArray(tasks) ? tasks : [];
+      const safeSpecial = specialAssignees && typeof specialAssignees === "object" ? specialAssignees : {};
+      const takobeyaAssigned = {};
+      const otherCounts = {};
 
-    tasks.forEach((t) => {
-      if (!t.assignee) return;
-      if (isTakobeyaName(t.propertyName)) {
-        takobeyaAssigned[t.date] = takobeyaAssigned[t.date] || {};
-        takobeyaAssigned[t.date][t.assignee] = true;
-      } else {
-        otherCounts[t.date] = otherCounts[t.date] || {};
-        otherCounts[t.date][t.assignee] = (otherCounts[t.date][t.assignee] || 0) + 1;
-      }
-    });
+      safeTasks.forEach((t) => {
+        if (!t || !t.assignee) return;
+        if (isTakobeyaName(t.propertyName)) {
+          takobeyaAssigned[t.date] = takobeyaAssigned[t.date] || {};
+          takobeyaAssigned[t.date][t.assignee] = true;
+        } else {
+          otherCounts[t.date] = otherCounts[t.date] || {};
+          otherCounts[t.date][t.assignee] = (otherCounts[t.date][t.assignee] || 0) + 1;
+        }
+      });
 
-    Object.entries(specialAssignees).forEach(([key, name]) => {
-      if (!name) return;
-      const [rowKey, iso] = key.split("|");
-      if (rowKey !== "takobeya_common") return;
-      takobeyaAssigned[iso] = takobeyaAssigned[iso] || {};
-      takobeyaAssigned[iso][name] = true;
-    });
+      Object.entries(safeSpecial).forEach(([key, name]) => {
+        if (!name) return;
+        const [rowKey, iso] = key.split("|");
+        if (rowKey !== "takobeya_common") return;
+        takobeyaAssigned[iso] = takobeyaAssigned[iso] || {};
+        takobeyaAssigned[iso][name] = true;
+      });
 
-    const counts = {};
-    const allDates = new Set([...Object.keys(takobeyaAssigned), ...Object.keys(otherCounts)]);
-    allDates.forEach((date) => {
-      counts[date] = {};
-      const names = new Set([...Object.keys(takobeyaAssigned[date] || {}), ...Object.keys(otherCounts[date] || {})]);
-      names.forEach((name) => {
-        const tb = takobeyaAssigned[date]?.[name] ? 1 : 0;
-        const other = otherCounts[date]?.[name] || 0;
+      const counts = {};
+      const allDates = new Set([...Object.keys(takobeyaAssigned), ...Object.keys(otherCounts)]);
+      allDates.forEach((date) => {
+        counts[date] = {};
+        const names = new Set([...Object.keys(takobeyaAssigned[date] || {}), ...Object.keys(otherCounts[date] || {})]);
+        names.forEach((name) => {
+          const tb = takobeyaAssigned[date]?.[name] ? 1 : 0;
+          const other = otherCounts[date]?.[name] || 0;
         counts[date][name] = tb + other;
       });
     });
     return counts;
+    } catch (e) {
+      return {};
+    }
   }, [tasks, specialAssignees]);
 
   const getEligibleStaff = (shiftAreaKey, iso, sameDayRequired, currentAssignee) => {
@@ -439,16 +444,18 @@ export default function CleaningCalendar({
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const filteredTasks = useMemo(() => {
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
     if (area === "message") return [];
-    if (area === "all") return tasks;
-    return tasks.filter((t) => t.area === area);
+    if (area === "all") return safeTasks;
+    return safeTasks.filter((t) => t && t.area === area);
   }, [tasks, area]);
 
   const visibleProperties = useMemo(() => {
+    const safeProps = Array.isArray(initialProperties) ? initialProperties : [];
     let list;
-    if (area === "all") list = initialProperties;
+    if (area === "all") list = safeProps;
     else if (area === "message") list = [];
-    else list = initialProperties.filter((p) => p.area === area);
+    else list = safeProps.filter((p) => p && p.area === area);
     return list.map((p, i) => ({ ...p, color: PALETTE[i % PALETTE.length] }));
   }, [initialProperties, area]);
 
@@ -550,10 +557,15 @@ export default function CleaningCalendar({
   };
 
   const todayCounts = useMemo(() => {
-    const todayTasks = filteredTasks.filter((t) => t.date === toISO(today));
-    const c = { pending: 0, done: 0, needs_check: 0 };
-    todayTasks.forEach((t) => (c[effectiveStatus(t)] += 1));
-    return { total: todayTasks.length, ...c };
+    try {
+      const safeFiltered = Array.isArray(filteredTasks) ? filteredTasks : [];
+      const todayTasks = safeFiltered.filter((t) => t && t.date === toISO(today));
+      const c = { pending: 0, done: 0, needs_check: 0 };
+      todayTasks.forEach((t) => (c[effectiveStatus(t)] += 1));
+      return { total: todayTasks.length, ...c };
+    } catch (e) {
+      return { total: 0, pending: 0, done: 0, needs_check: 0 };
+    }
   }, [filteredTasks, today]);
 
   const prevWeekHref = `/?start=${toISO(addDays(weekStart, -7))}`;
